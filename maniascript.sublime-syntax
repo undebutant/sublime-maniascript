@@ -35,6 +35,9 @@ contexts:
           scope: punctuation.definition.comment.maniascript
           pop: true
 
+  #variable_insertion:
+
+
 
   main:
     # The main context is the initial starting point of our syntax
@@ -53,18 +56,14 @@ contexts:
     - include: numbers
 
   manialink:
-    - match: '(return) (""")'
-      captures:
-        1: keyword.control.maniascript
-        2: punctuation.definition.string.begin.maniascript
-      push: Packages/XML/XML.sublime-syntax
-      with_prototype:
-        - match: '(?=(<script>|""";))'
-          pop: true
+    - match: '""" *\n'
+      escape: '(<script>|""")'
+      embed:
+        - Packages/XML/XML.sublime-syntax
     - match: '-->'
       push: Packages/XML/XML.sublime-syntax
       with_prototype:
-        - match: '(?=(<script>|""";))'
+        - match: '(<script>|""")'
           pop: true
 
   functions:
@@ -139,12 +138,15 @@ contexts:
           scope: keyword.operator.assignment.maniascript
         - match: '(\b[A-Za-z_][A-Za-z_0-9]*\b)'
           set:
+            - include: operators
+            - include: numbers
+            - include: strings
             - match: ' (for) ((\b[A-Za-z_]*\b))'
               captures:
                 1: keyword.operator.assignment.maniascript
                 2: variable.parameter.maniascript
               pop: true
-            - match: ' (=) ([A-Za-z_.0-9]+)'
+            - match: ' (=) '
               captures:
                 1: keyword.operator.assignment.maniascript
                 2: constant.numeric.maniascript
@@ -153,14 +155,14 @@ contexts:
               pop: true
 
   includes:
-    - match: '^ *(#Include) (")([A-Za-z_\-/.]*)(")'
+    - match: '^ *(#Include) (")([A-Za-z0-9_\-/.]+)(")'
       captures:
         1: constant.language.maniascript
         2: punctuation.definition.string.begin.maniascript
         3: string.quoted.double.maniascript
         4: punctuation.definition.string.end.maniascript
       set:
-        - match: ' (as) (\b[A-Za-z_][A-Za-z_0-9]*\b)'
+        - match: ' (as) (\b[A-Za-z_0-9]*\b)'
           captures:
             1: keyword.operator.assignment.maniascript
             2: variable.parameter.maniascript
@@ -183,13 +185,15 @@ contexts:
       scope: storage.type.maniascript
 
   strings:
-    # Strings begin and end with quotes, and use backslashes as an escape character
-    - match: '(?!(?<=</manialink>))"'
+    - match: '"'
       scope: punctuation.definition.string.begin.maniascript
       set:
+        - meta_include_prototype: false
         - meta_scope: string.quoted.double.maniascript
         - match: '\\[bfnrt"\\]'
           scope: constant.character.escape.maniascript
+        - match: '""'
+          pop: true
         - match: '"'
           scope: punctuation.definition.string.end.maniascript
           pop: true
