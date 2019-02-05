@@ -9,6 +9,7 @@ contexts:
   # The prototype context is prepended to all contexts but those setting meta_include_prototype: false
   prototype:
     - include: comments
+    - include: variable_insertion
 
   comments:
     # Comments beginning with a '//' and finishing at the end of the line
@@ -35,8 +36,9 @@ contexts:
           scope: punctuation.definition.comment.maniascript
           pop: true
 
-  #variable_insertion:
-
+  variable_insertion:
+    - match: '{{{[A-Za-z.:_\-"/+\*%| $&@\(\)0-9]+}}}'
+      scope: constant.character.escape.maniascript
 
 
   main:
@@ -57,14 +59,16 @@ contexts:
 
   manialink:
     - match: '""" *\n'
-      escape: '(<script>|""")'
+      escape: '(<script>|"""|^(?!( *<| *\n| *{{{)))'
       embed:
-        - Packages/XML/XML.sublime-syntax
+        - sub_xml
     - match: '-->'
-      push: Packages/XML/XML.sublime-syntax
-      with_prototype:
-        - match: '(<script>|""")'
-          pop: true
+      escape: '(<script>|"""|^(?!( *<| *\n| *{{{)))'
+      embed:
+        - sub_xml
+
+  sub_xml:
+    - include: Packages/XML/XML.sublime-syntax
 
   functions:
     - match: '(wait|sleep|assert|log)'
@@ -90,13 +94,17 @@ contexts:
       captures:
         1: variable.function.maniascript
       pop: true
-    - match: '\b[A-Za-z_0-9]*\b::([A-Za-z_]+)'
+    - match: '\b[A-Za-z_0-9]*\b::([A-Za-z_]+)\('
       captures:
         1: entity.name.type.maniascript
       pop: true
     - match: '\b[A-Za-z_0-9]*\b\.([A-Za-z_]+)'
       captures:
         1: variable.language.maniascript
+      pop: true
+    - match: '\b[A-Za-z_0-9]*\b::([A-Za-z_]+)'
+      captures:
+        1: entity.name.type.maniascript
       pop: true
 
   structs:
@@ -141,6 +149,8 @@ contexts:
             - include: operators
             - include: numbers
             - include: strings
+            - include: variable_accessor
+            - include: var_types
             - match: ' (for) ((\b[A-Za-z_]*\b))'
               captures:
                 1: keyword.operator.assignment.maniascript
@@ -190,10 +200,11 @@ contexts:
       set:
         - meta_include_prototype: false
         - meta_scope: string.quoted.double.maniascript
-        - match: '\\[bfnrt"\\]'
-          scope: constant.character.escape.maniascript
+        - include: variable_insertion
         - match: '""'
           pop: true
+        - match: '\\[bfnrt"\\]'
+          scope: constant.character.escape.maniascript
         - match: '"'
           scope: punctuation.definition.string.end.maniascript
           pop: true
