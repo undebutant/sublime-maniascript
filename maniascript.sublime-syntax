@@ -37,8 +37,13 @@ contexts:
           pop: true
 
   variable_insertion:
-    - match: '{{{[A-Za-z.:_\-"/+\*%| $&@\(\)0-9]+}}}'
-      scope: constant.character.escape.maniascript
+    - match: '{{{'
+      scope: variable.parameter.maniascript
+      escape: '}}}'
+      escape_captures:
+        0: variable.parameter.maniascript
+      embed:
+        - main
 
 
   main:
@@ -68,10 +73,11 @@ contexts:
         - sub_xml
 
   sub_xml:
+    # Kept for variable_insertion prototype inclusion
     - include: Packages/XML/XML.sublime-syntax
 
   functions:
-    - match: '(wait|sleep|assert|log)'
+    - match: '(wait|sleep|assert|log|dump)'
       scope: entity.name.function.maniascript
     - match: '^ *([A-Za-z_]+) ([A-Za-z_]+) ?(\()'
       captures:
