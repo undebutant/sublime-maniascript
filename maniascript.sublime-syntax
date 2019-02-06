@@ -49,8 +49,8 @@ contexts:
 
   main:
     # The main context is the initial starting point of our syntax
-    - include: operators
     - include: escape_embedded_maniascript
+    - include: operators
     - include: Packages/XML/XML.sublime-syntax
     - include: functions_like
     - include: structs
@@ -66,6 +66,9 @@ contexts:
 
   escape_embedded_maniascript:
     - match: '<(script)> *<!--'
+      captures:
+        1: entity.name.tag.maniascript
+    - match: '--> *</(script)>'
       captures:
         1: entity.name.tag.maniascript
 
