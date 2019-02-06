@@ -17,9 +17,9 @@ contexts:
       scope: punctuation.definition.comment.maniascript
       push:
         - meta_scope: comment.line.double-slash.maniascript
-        - match: '(?i:todo|hack|fixme|soon)'
+        - match: '(?i:todo|fixme|soon).*'
           scope: invalid.deprecated.maniascript
-        - match: '(?:/!\\)'
+        - match: '(?i:/!\\|hack).*'
           scope: invalid.illegal.maniascript
         - match: '$\n?'
           pop: true
@@ -28,63 +28,79 @@ contexts:
       scope: punctuation.definition.comment.maniascript
       push:
         - meta_scope: comment.block.maniascript
-        - match: '(?i:todo|fixme|soon)'
+        - match: '(?i:todo|fixme|soon).*'
           scope: invalid.deprecated.maniascript
-        - match: '(?i:/!\\|hack)'
+        - match: '(?i:/!\\|hack).*'
           scope: invalid.illegal.maniascript
         - match: '\*/'
           scope: punctuation.definition.comment.maniascript
           pop: true
 
   variable_insertion:
+    # Handling {{{stuff}}} inside """embeddable string"""
     - match: '{{{'
-      scope: variable.parameter.maniascript
+      scope: punctuation.section.mapping.maniascript
       escape: '}}}'
       escape_captures:
-        0: variable.parameter.maniascript
+        0: punctuation.section.mapping.maniascript
       embed:
         - main
 
 
   main:
     # The main context is the initial starting point of our syntax
-    - include: manialink
-    - include: functions
+    - include: operators
+    - include: Packages/XML/XML.sublime-syntax
+    - include: functions_like
     - include: structs
     - include: keywords
     - include: declares
-    - include: constants
     - include: includes
     - include: var_types
     - include: variable_accessor
     - include: strings
-    - include: operators
+    - include: lists
     - include: punctuations
     - include: numbers
 
-  manialink:
-    - match: '""" *\n'
-      escape: '(<script>|"""|^(?!( *<| *\n| *{{{)))'
-      embed:
-        - sub_xml
-    - match: '-->'
-      escape: '(<script>|"""|^(?!( *<| *\n| *{{{)))'
-      embed:
-        - sub_xml
-
-  sub_xml:
-    # Kept for variable_insertion prototype inclusion
-    - include: Packages/XML/XML.sublime-syntax
-
-  functions:
-    - match: '(wait|sleep|assert|log|dump)'
-      scope: entity.name.function.maniascript
-    - match: '^ *([A-Za-z_]+) ([A-Za-z_]+) ?(\()'
+  functions_like:
+    # Language keywords
+    - match: '\b(if|else|else if|switch|case|while|foreach|for)\b'
+      captures:
+        1: keyword.control.conditional.maniascript
+        2: punctuation.section.parens.begin.maniascript
+    # Language script functions
+    - match: '\b(wait|sleep|assert|log|dump|yield)\b'
+      captures:
+        1: keyword.control.flow.maniascript
+        2: punctuation.section.parens.begin.maniascript
+    # main() special case
+    - match: '^ *(main) ?(\()'
+      captures:
+        1: entity.name.function.maniascript
+        2: punctuation.section.parens.begin.maniascript
+      push:
+        - match: ' ?([A-Za-z_]+) ([A-Za-z_]+),?'
+          captures:
+            1: storage.type.maniascript
+            2: variable.parameter.maniascript
+        - match: '(\)) ?({)'
+          captures:
+            1: punctuation.section.parens.end.maniascript
+            2: punctuation.section.braces.begin.maniascript
+          pop: true
+    # Function call
+    - match: '([A-Za-z_]+) ?(\()'
+      captures:
+        1: variable.function.maniascript
+        2: punctuation.section.parens.begin.maniascript
+    # Function definition
+    - match: '([A-Za-z_]+) *([A-Za-z_]+) ?(\()'
       captures:
         1: storage.type.maniascript
         2: entity.name.function.maniascript
         3: punctuation.section.parens.begin.maniascript
-      set:
+      push:
         - match: ' ?([A-Za-z_]+) ([A-Za-z_]+),?'
           captures:
             1: storage.type.maniascript
@@ -95,93 +111,76 @@ contexts:
             2: punctuation.section.braces.begin.maniascript
           pop: true
 
-  variable_accessor:
-    - match: '\b[A-Za-z_0-9]*\b\.([A-Za-z_]+)\('
-      captures:
-        1: variable.function.maniascript
-      pop: true
-    - match: '\b[A-Za-z_0-9]*\b::([A-Za-z_]+)\('
-      captures:
-        1: entity.name.type.maniascript
-      pop: true
-    - match: '\b[A-Za-z_0-9]*\b\.([A-Za-z_]+)'
-      captures:
-        1: variable.language.maniascript
-      pop: true
-    - match: '\b[A-Za-z_0-9]*\b::([A-Za-z_]+)'
-      captures:
-        1: entity.name.type.maniascript
-      pop: true
-
   structs:
+    # Defining #Struct with sub context call
     - match: '#Struct'
       scope: constant.language.maniascript
       set: [struct_content, struct_name]
 
   struct_name:
     - match: '\b[A-Za-z_][A-Za-z_0-9]*\b'
-      scope: entity.name.maniascript
+      scope: entity.name.struct.maniascript
       set:
         - match: '{'
           pop: true
 
   struct_content:
-    - match: ' +'
+    - match: ' *'
       set:
-        - match: ([A-Za-z_][A-Za-z_0-9]*) +([A-Za-z_][A-Za-z_0-9]*);
+        - include: var_types
+        - match: '([A-Za-z_][A-Za-z_0-9]*);'
           captures:
-            1: storage.type.maniascript
-            2: variable.parameter.maniascript
+            1: entity.name.trait.maniascript
         - match: '}'
+          scope: punctuation.section.braces.end.maniascript
           pop: true
 
   keywords:
-    - match: '\b(if|else|for|while|foreach|switch|case|break|continue|default|return|metadata)\b'
-      scope: keyword.control.maniascript
-    - match: '(False|True)'
-      scope: constant.language
-    - match: '\bin\b'
+    # Language related keywords
+    - match: '(False|True|Null)'
+      scope: constant.language.maniascript
+    - match: '\b(break|continue|default|return|metadata)\b'
+      scope: constant.other.maniascript
+    - match: '\b(in|for|as)\b'
       scope: keyword.operator.assignment.maniascript
 
   declares:
-    - match: '^ *(declare) +'
-      scope: constant.language.maniascript
+    - match: 'declare'
+      scope: constant.other.maniascript
       set:
         - include: var_types
         - match: '(netread|netwrite)'
-          scope: keyword.operator.assignment.maniascript
+          scope: constant.other.maniascript
         - match: '(\b[A-Za-z_][A-Za-z_0-9]*\b)'
           set:
             - include: operators
             - include: numbers
+            - include: lists
             - include: strings
             - include: variable_accessor
             - include: var_types
-            - match: ' (for) ((\b[A-Za-z_]*\b))'
+            - include: keywords
+            - include: functions_like
+            - match: ' +(for) +((\b[A-Za-z_]*\b))'
               captures:
                 1: keyword.operator.assignment.maniascript
-                2: variable.parameter.maniascript
-              pop: true
-            - match: ' (=) '
-              captures:
-                1: keyword.operator.assignment.maniascript
-                2: constant.numeric.maniascript
+                2: keyword.declaration.extends.maniascript
             - match: ';'
               scope: punctuation.terminator.maniascript
               pop: true
 
   includes:
-    - match: '^ *(#Include) (")([A-Za-z0-9_\-/.]+)(")'
+    - match: '^ *(#Include) +(")([A-Za-z0-9_\-/.]+)(")'
       captures:
         1: constant.language.maniascript
         2: punctuation.definition.string.begin.maniascript
         3: string.quoted.double.maniascript
         4: punctuation.definition.string.end.maniascript
       set:
-        - match: ' (as) (\b[A-Za-z_0-9]*\b)'
+        - match: ' +(as) +(\b[A-Za-z_0-9]*\b)'
           captures:
             1: keyword.operator.assignment.maniascript
-            2: variable.parameter.maniascript
+            2: keyword.control.import.maniascript
         - match: '$\n?'
           pop: true
 
@@ -192,20 +191,29 @@ contexts:
       scope: constant.language.maniascript
     # Internal ManiaScript structs
     - match: '\b(CMlScript|CMlEntry|CMlFileEntry|CMlLabel|CMlMediaPlayer|CMlQuad|CMlGauge|CMlGraph|CMlMinimap|CMlCamera|CMlBrowser|CManiaApp|CManiaAppEvent|CManiaAppTitle|CStation|CMlStation|CEditorPlugin|CSmMode|CSmMlScriptIngame|CSmAction|CSmMapType|CTmMlScriptIngame|CTmMode|CTmMapType|CNod|CMlPage|CUser|CTitle|CMlEvent|CXmlManager|CHttpManager|CAudioManager|CMlControl|CMlGraphCurve|CMap|CUILayer|CEditorPluginEvent|CBlockModel|CMacroblockModel|CItemAnchor|CBlock|CAnchorData|CMode|CSmPlayer|CSmModeEvent|CSmMapBase|CSmMapLandmark|CSmScore|CSmObject|CMlScriptIngame|CSmActionEvent|CMapType|CTmMlPlayer|CTmScore|CTmPlayer|CTmModeEvent|CMlFrame|CXmlDocument|CHttpRequest|CAudioSound|CMapInfo|CCollector|CBlockModelVariantGround|CBlockModelVariantAir|CBlockUnit|CTeam|CUIConfigMgr|CXmlRpc|CPlayer|CSmPlayerDriver|CSmBlockPole|CSmMapGate|CSmMapGauge|CSmMapSector|CSmMapPlayerSpawn|CSmMapBotPath|CSmMapObjectAnchor|CScore|CUIConfig|CTrackManiaScore|CTmResult|CXmlNode|CBlockModelVariant|CBlockUnitModel|CXmlRpcEvent|CSmBlock|CSmSector|CSmGauge|CBlockModelClip|CSmLandmark|CSmBase)\b'
-      scope: storage.type.maniascript
+      scope: entity.name.struct.maniascript
     # Internal variables
-    - match: '\b(Page|PageIsVisible|Now|Period|CurrentTime|CurrentTimeText|CurrentLocalDateText|LocalUser|LoadedTitle|MouseX|MouseY|MouseLeftButton|MouseRightButton|MouseMiddleButton|KeyUp|KeyDown|KeyLeft|KeyRight|KeyReturn|KeySpace|KeyDelete|EnableMenuNavigationInputs|IsMenuNavigationForeground|Xml|Http|Audio|Value|MaxLine|AutoNewLine|FullFileName|Style|Substyle|TextFont|Value|ValueLineCount|MaxLine|AppendEllipsis|AutoNewLine|Opacity|TextColor|TextSize|ImageUrl|ImageUrlFocus|Style|Substyle|StyleSelected|DownloadInProgress|Colorize|ModulateColor|BgColor|BgColorFocus|Opacity|KeepRatio|Style|Ratio|GradingRatio|Clan|Color|DrawBackground|DrawBlockBackground|CenteredBar|CoordsMin|CoordsMax|WorldPosition|MapPosition|MapYaw|ZoomFactor|CurMap|BuddyDoResult|BuddyDoErrorMessage|IsInBrowser|BrowserFocusedFrameId|Now|IsVisible|LocalUser|LoadedTitle|EnableMenuNavigationInputs|MouseX|MouseY|Xml|Http|Audio|Type|CustomEventLayer|CustomEventType|ExternalEventType|MenuNavAction|KeyCode|KeyName|LoadingScreenRequireKeyPressed|DontScaleMainMenuForHMD|Title|AudienceRegisteredUsers|CampaignMedalsMax|CampaignMedalsCurrent|CampaignMedalsRanking|LadderPoints|LadderRank|Station|Map|PlaceMode|EditMode|UndergroundMode|BlockStockMode|CursorCoord|CursorDir|CursorBlockModel|CursorTerrainBlockModel|CursorMacroblockModel|CameraVAngle|CameraHAngle|CameraToTargetDistance|TargetedPosition|EnableAirMapping|EnableMixMapping|MediatrackIngameEditedClipIndex|CustomSelectionRGB|EnableEditorInputsCustomProcessing|EditorInputIsDown_Menu|EditorInputIsDown_SwitchToRace|EditorInputIsDown_CursorUp|EditorInputIsDown_CursorRight|EditorInputIsDown_CursorDown|EditorInputIsDown_CursorLeft|EditorInputIsDown_CursorRaise|EditorInputIsDown_CursorLower|EditorInputIsDown_CursorTurn|EditorInputIsDown_CursorPick|EditorInputIsDown_CursorPlace|EditorInputIsDown_CursorDelete|EditorInputIsDown_CameraUp|EditorInputIsDown_CameraRight|EditorInputIsDown_CameraDown|EditorInputIsDown_CameraLeft|EditorInputIsDown_IconUp|EditorInputIsDown_IconRight|EditorInputIsDown_IconDown|EditorInputIsDown_IconLeft|CollectionSquareSize|CollectionSquareHeight|CollectionGroundY|ManialinkText|ManialinkPage|StartTime|EndTime|SpawnInvulnerabilityDuration|UseClans|UseForcedClans|UsePvPCollisions|UsePvPWeapons|UseInterractiveScreensIn3d|UseLaserVsBullets|UseLaserSkewering|UsePlayerTagging|UseBeaconsWithRecipients|UseAmmoBonusOnHit|UseSameWallJump|UseDefaultActionEvents|UseAllies|UseAutoSpawnBots|ForceNavMapsComputation|GameplayVersion|Gameplay|UseProtectClanmates|OffZoneRadius|OffZoneRadiusSpeed|OffZoneCenterLandmarkId|PlayersNbTotal|PlayersNbAlive|PlayersNbDead|ClansNbTotal|ClansNbAlive|ClansNbDead|ArenaNow|InputPlayer|GUIPlayer|HideResumePlayingButton|Now|Variant|Owner|IsActive|Energy|EnergyMax|EnergyCost|EnergyReload|InitialDirection,Vec3|Cooldown|Mode|InputPlayer|GUIPlayer|MapStartLinePos|MapIsLapRace|MapNbLaps|Clan1Score|Clan2Score|ClansNbTotal|CutOffTimeLimit|NbLaps|IndependantLaps|UseClans|UseForcedClans|RespawnBehaviour|UiRounds|UiLaps|UiStuntsMode|UiDisplayStuntsNames|UiDisableHelpMessage|UiScoresPointsLimit|UiRaceChrono|HideOpponents|ForceMaxOpponents|EnableLegacyXmlRpcCallbacks|MedalGhost_ShowGold|MedalGhost_ShowSilver|MedalGhost_ShowBronze|PersonalGhost|MapStartLinePos|MapIsLapRace|MapNbLaps|Mode|Id|MainFrame|LinksInhibited|Login|Name|AvatarUrl|ZonePath|ZoneFlagUrl|CountryFlagUrl|Language|Description|Color|ClubLink|BroadcastTVLogin|SteamUserId|FameStars|Echelon|IsBeginner|LadderRank|LadderTotal|LadderPoints|LadderZoneName|LadderZoneFlagUrl|RequestedClan|RequestsSpectate|IsFakeUser|StereoDisplayMode|TitleId|BaseTitleId|Name|Desc|InfoUrl|DownloadUrl|TitleVersion|Type|KeyCode|KeyName|CharPressed|ControlId|Control|MenuNavAction|CustomEventType|SlotsAvailable|ForceEnableMusic|LimitMusicVolumedB|ControlId|Size|HorizontalAlign|VerticalAlign|Visible|RelativePosition|RelativeScale|RelativeRotation|AbsolutePosition|AbsoluteScale|AbsoluteRotation|Color|Style|Width|MapInfo|MapName|Comments|AuthorZoneIconUrl|CollectionName|DecorationName|AuthorLogin|AuthorNickName|AuthorZonePath|MapType|MapStyle|TMObjective_AuthorTime|TMObjective_GoldTime|TMObjective_SilverTime|TMObjective_BronzeTime|TMObjective_NbLaps|TMObjective_IsLapRace|ObjectiveTextAuthor|ObjectiveTextGold|ObjectiveTextSilver|ObjectiveTextBronze|CopperPrice|Size|IsVisible|Type|AttachId|ManialinkPage|LocalPage|Type|Input|EditedAnchorDataId|Name|IsRoad|IsTerrain|WaypointType|NoRespawn|VariantGround|VariantAir|IsGround|HasStart|HasFinish|HasCheckpoint|GeneratedBlockModel|Name|Position|BlockScriptId|CanHaveAnchor|Coord|Direction|BlockModel|DefaultTag|DefaultOrder|Tag|Order|ModeStatusMessage|LoadedTitle|ServerLogin|ServerName|ServerModeName|MapName|Map|MapPlayerModelName|NeutralEmblemUrl|ForcedClubLinkUrl1|ForcedClubLinkUrl2|Now|Period|MatchEndRequested|ServerShutdownRequested|MapLoaded|NextMapIndex|UIManager|Ladder_RequestInProgress|Solo_NewRecordSequenceInProgress|XmlRpc|Xml|Http|UseMinimap|Replay_AutoStart|Score|SpawnStatus|StartTime|EndTime|AmmoGain|AmmoPower|AutoSwitchWeapon|CurWeapon|CurAmmo|CurAmmoMax|CurAmmoUnit|Armor|ArmorMax|ArmorGain|ArmorReplenishGain|ArmorPower|Stamina|StaminaMax|StaminaGain|StaminaPower|SpeedPower|JumpPower|AllowWallJump|AllowProgressiveJump|UseAlternateWeaponVisual|IsHighlighted|EnergyLevel|ForceColor|ForceModelId|HasShield|ThrowSpeed|CurrentClan|IdleDuration|Position|AimYaw|AimPitch|AimDirection|IsUnderground|IsTouchingGround|IsInAir|IsOnTechGround|IsOnTechLaser|IsOnTechArrow|IsOnTechArmor|IsOnTechSafeZone|IsOnTech|IsOnTechNoWeapon|IsInWater|Velocity|Speed|IsInOffZone|IsCapturing|CapturedLandmark|IsFakePlayer|IsBot|Driver|Type|Player|Damage|VictimObject|ShooterPoints|Shooter|Victim|Height|MissDist|WeaponNum|ShooterUsedAction|ShooterWeaponNum|ShooterActionSlot|ShooterActionId|VictimUsedAction|VictimWeaponNum|VictimActionSlot|VictimActionId|Action_Slot|ActionInput|ActionId|Param1|Object|BlockPole|Landmark|PlayerId|User|PlayerWasSpawned|PlayerWasInLadderMatch|PlayerLastPosition|PlayerLastAimDirection|GiveUp|CommandName|CommandValueBoolean|CommandValueInteger|CommandValueReal|CommandValueText|ActionChange|Clan|IsActive|NumberOfCollectors|Tag|Order|Position|Base|Gate|Gauge|Sector|PlayerSpawn|BotPath|ObjectAnchor|TeamNum|Points|RoundPoints|NbEliminationsInflicted|NbEliminationsTaken|NbRespawnsRequested|DamageInflicted|DamageTaken|Status|ModelId|Player|Position|Vel|MachineState|Throwable|GameTime|UI|ClientUI|IsSpectatorMode|UseClans|UseForcedClans|Map|CurrentServerLogin|CurrentServerName|CurrentServerJoinLink|CurrentServerModeName|Type|Player|Damage|ProjectileModelId|ContextId|Position|Direction|Normal|CustomEditAnchorData|ValidationStatus|ValidabilityRequirementsMessage|ValidationEndRequested|IsSwitchedToPlayground|CurrentClan|RaceState|IsSpawned|Score|RaceStartTime|LapStartTime|CurRace|CurLap|CurrentNbLaps|CurTriggerIndex|CurCheckpointRaceTime|CurCheckpointLapTime|AccelCoef|ControlCoef|Position|AimYaw|AimPitch|AimDirection|Distance|Speed|DisplaySpeed|TeamNum|Points|BestRace|BestLap|PrevRaceDeltaPoints|PrevRace|TempResult|CurrentClan|Score|RaceStartTime|IsSpawned|CurRace|CurLap|CurrentNbLaps|CurTriggerIndex|Position|AimYaw|AimPitch|AimDirection|AccelCoef|ControlCoef|Type|Player|RaceTime|CheckpointInRace|CheckpointInLap|IsEndLap|IsEndRace|LapTime|StuntsScore|NbRespawns|BlockId|Speed|Distance|Damages|StuntFigure|Angle|Points|Combo|IsStraight|IsReverse|IsMasterJump|Factor|User|PlayerWasSpawned|PlayerWasInLadderMatch|ClipWindowActive|ClipWindowRelativePosition|ClipWindowSize|TextContents|Root|Url|Result|StatusCode|IsCompleted|IsPlaying|DownloadInProgress|Volume|VolumedB|Pitch|RelativePosition|PlayCursor|PlayLength|Comments|CopperPrice|CollectionName|AuthorLogin|AuthorNickName|AuthorZonePath|MapType|MapStyle|Unlocked|Name|Path|Name|PageName|Offset|BlockUnitModel|Block|Name|ZonePath|City|EmblemUrl|PresentationManialinkUrl|ClubLinkUrl|ColorPrimary|ColorSecondary|ColorText|ColorizedName|UIAll|UISequenceMaxDuration|User|Login|Name|RequestedClan|RequestsSpectate|Behaviour|AggroRadius|DisengageDistance|PathSpeedCoef|Accuracy|ReactionTime|ShootPeriodMin|ShootPeriodMax|RocketAnticipation|Fov|AttackFilter|Target|IsStuck|IsFlying|PathOffset|Agressivity|UseOldShootingSystem|Patrol_Mode|Escape_AnchorPoint|Escape_DistanceSafe|Escape_DistanceMinEscape|Escape_DistanceMaxEscape|Saunter_AnchorPoint|Saunter_BaseChillingTime|Saunter_ChillingTimeDelta|Saunter_Radius|Scripted_ForceAimInMoveDir|ForcedTarget|Captured|Sector|Gauge|Clan|Automatic|ManualClosed|AutoClosed|AutoIsActive|AutoCloseDelay|AutoOpenSpeed|Clan|ValueReal|Value|Max|Speed|Captured|Clan|IsFlying|ItemName|ItemModelId|User|IsRegisteredForLadderMatch|LadderScore|LadderRankSortValue|LadderMatchScoreValue|LadderClan|UISequence|UISequenceIsCompleted|UISequence_CustomMTClip|UISequence_CustomMTRefTime|UISequence_CanSkipIntroMT|UISequence_PodiumPlayersWin|UISequence_PodiumPlayersLose|ManialinkPage|BigMessage|BigMessageAvatarLogin|BigMessageAvatarVariant|BigMessageSound|BigMessageSoundVariant|StatusMessage|GaugeMessage|GaugeRatio|GaugeClan|MarkersXML|OverlayHideNotices|OverlayHideMapInfo|OverlayHideOpponentsInfo|OverlayHideChat|OverlayHideCheckPointList|OverlayHideRoundScores|OverlayHideCountdown|OverlayHideCrosshair|OverlayHideGauges|OverlayHideConsumables|OverlayHide321Go|OverlayHideBackground|OverlayHideChrono|OverlayHideSpeedAndDist|OverlayHidePersonnalBestAndRank|OverlayHidePosition|OverlayHideCheckPointTime|OverlayHideEndMapLadderRecap|OverlayHideMultilapInfos|OverlayHideSpectatorControllers|OverlayHideSpectatorInfos|OverlayChatHideAvatar|OverlayChatLineCount|OverlayChatOffset|CountdownCoord|NoticesFilter_HidePlayerInfo|NoticesFilter_HidePlayerWarning|NoticesFilter_HidePlayerInfoIfNotMe|NoticesFilter_HidePlayerWarningIfNotMe|NoticesFilter_HideMapInfo|NoticesFilter_HideMapWarning|NoticesFilter_HideMatchInfo|NoticesFilter_HideMatchWarning|NoticesFilter_LevelToShowAsBigMessage|ScoreTable|ScoreTableVisibility|SmallScoreTable|SmallScoreTableVisibility|ScoreTableOnlyManialink|AltMenuNoDefaultScores|AltMenuNoCustomScores|OverlayScoreSummary|ScoreSummary_Player1|ScoreSummary_Points1|ScoreSummary_RoundPoints1|ScoreSummary_MatchPoints1|ScoreSummary_Gauge1|ScoreSummary_Player2|ScoreSummary_Points2|ScoreSummary_RoundPoints2|ScoreSummary_MatchPoints2|ScoreSummary_Gauge2|ScreenIn3dHideScoreSummary|ScreenIn3dHideVersus|CountdownEndTime|UIStatus|AlliesLabelsVisibility|AlliesLabelsShowGauges|AlliesLabelsShowNames|AlliesLabelsMaxCount|TeamLabelsVisibility|TeamLabelsShowGauges|TeamLabelsShowNames|OpposingTeamLabelsVisibility|OpposingTeamLabelsShowGauges|OpposingTeamLabelsShowNames|ForceSpectator|SpectatorForceCameraType|SpectatorAutoTarget|SpectatorForcedTarget|SpectatorForcedClan|SpectatorCamAutoLatitude|SpectatorCamAutoLongitude|SpectatorCamAutoRadius|SpectatorObserverMode|Time|StuntsScore|NbRespawns|Name|TextContents|TextRawContents|TextRecursiveContents|Name|IsAllUnderground|IsPartUnderground|Size|OffsetBoundingBoxMin|OffsetBoundingBoxMax|Offset|Type|Param1|Param2|ParamArray1|Base|Clan|ValueReal|Value|Max|Speed|Tag|Order|Position|DirFront|Clan|IsActive|NumberOfCollectors)\b'
-      scope: storage.type.maniascript
+    - match: '\b(Page|PageIsVisible|Now|Period|CurrentTime|CurrentTimeText|CurrentLocalDateText|LocalUser|LoadedTitle|MouseX|MouseY|MouseLeftButton|MouseRightButton|MouseMiddleButton|KeyUp|KeyDown|KeyLeft|KeyRight|KeyReturn|KeySpace|KeyDelete|EnableMenuNavigationInputs|IsMenuNavigationForeground|Xml|Http|Audio|Value|MaxLine|AutoNewLine|FullFileName|Style|Substyle|TextFont|Value|ValueLineCount|MaxLine|AppendEllipsis|AutoNewLine|Opacity|TextColor|TextSize|ImageUrl|ImageUrlFocus|Style|Substyle|StyleSelected|DownloadInProgress|Colorize|ModulateColor|BgColor|BgColorFocus|Opacity|KeepRatio|Style|Ratio|GradingRatio|Clan|Color|DrawBackground|DrawBlockBackground|CenteredBar|CoordsMin|CoordsMax|WorldPosition|MapPosition|MapYaw|ZoomFactor|CurMap|BuddyDoResult|BuddyDoErrorMessage|IsInBrowser|BrowserFocusedFrameId|Now|IsVisible|LocalUser|LoadedTitle|EnableMenuNavigationInputs|MouseX|MouseY|Xml|Http|Audio|Type|CustomEventLayer|CustomEventType|ExternalEventType|MenuNavAction|KeyCode|KeyName|LoadingScreenRequireKeyPressed|DontScaleMainMenuForHMD|Title|AudienceRegisteredUsers|CampaignMedalsMax|CampaignMedalsCurrent|CampaignMedalsRanking|LadderPoints|LadderRank|Station|Map|PlaceMode|EditMode|UndergroundMode|BlockStockMode|CursorCoord|CursorDir|CursorBlockModel|CursorTerrainBlockModel|CursorMacroblockModel|CameraVAngle|CameraHAngle|CameraToTargetDistance|TargetedPosition|EnableAirMapping|EnableMixMapping|MediatrackIngameEditedClipIndex|CustomSelectionRGB|EnableEditorInputsCustomProcessing|EditorInputIsDown_Menu|EditorInputIsDown_SwitchToRace|EditorInputIsDown_CursorUp|EditorInputIsDown_CursorRight|EditorInputIsDown_CursorDown|EditorInputIsDown_CursorLeft|EditorInputIsDown_CursorRaise|EditorInputIsDown_CursorLower|EditorInputIsDown_CursorTurn|EditorInputIsDown_CursorPick|EditorInputIsDown_CursorPlace|EditorInputIsDown_CursorDelete|EditorInputIsDown_CameraUp|EditorInputIsDown_CameraRight|EditorInputIsDown_CameraDown|EditorInputIsDown_CameraLeft|EditorInputIsDown_IconUp|EditorInputIsDown_IconRight|EditorInputIsDown_IconDown|EditorInputIsDown_IconLeft|CollectionSquareSize|CollectionSquareHeight|CollectionGroundY|ManialinkText|ManialinkPage|StartTime|EndTime|SpawnInvulnerabilityDuration|UseClans|UseForcedClans|UsePvPCollisions|UsePvPWeapons|UseInterractiveScreensIn3d|UseLaserVsBullets|UseLaserSkewering|UsePlayerTagging|UseBeaconsWithRecipients|UseAmmoBonusOnHit|UseSameWallJump|UseDefaultActionEvents|UseAllies|UseAutoSpawnBots|ForceNavMapsComputation|GameplayVersion|Gameplay|UseProtectClanmates|OffZoneRadius|OffZoneRadiusSpeed|OffZoneCenterLandmarkId|PlayersNbTotal|PlayersNbAlive|PlayersNbDead|ClansNbTotal|ClansNbAlive|ClansNbDead|ArenaNow|InputPlayer|GUIPlayer|HideResumePlayingButton|Now|Variant|Owner|IsActive|Energy|EnergyMax|EnergyCost|EnergyReload|InitialDirection,Vec3|Cooldown|Mode|InputPlayer|GUIPlayer|MapStartLinePos|MapIsLapRace|MapNbLaps|Clan1Score|Clan2Score|ClansNbTotal|CutOffTimeLimit|NbLaps|IndependantLaps|UseClans|UseForcedClans|RespawnBehaviour|UiRounds|UiLaps|UiStuntsMode|UiDisplayStuntsNames|UiDisableHelpMessage|UiScoresPointsLimit|UiRaceChrono|HideOpponents|ForceMaxOpponents|EnableLegacyXmlRpcCallbacks|MedalGhost_ShowGold|MedalGhost_ShowSilver|MedalGhost_ShowBronze|PersonalGhost|MapStartLinePos|MapIsLapRace|MapNbLaps|Mode|Id|MainFrame|LinksInhibited|Login|Name|AvatarUrl|ZonePath|ZoneFlagUrl|CountryFlagUrl|Language|Description|Color|ClubLink|BroadcastTVLogin|SteamUserId|FameStars|Echelon|IsBeginner|LadderRank|LadderTotal|LadderPoints|LadderZoneName|LadderZoneFlagUrl|RequestedClan|RequestsSpectate|IsFakeUser|StereoDisplayMode|TitleId|BaseTitleId|Name|Desc|InfoUrl|DownloadUrl|TitleVersion|Type|KeyCode|KeyName|CharPressed|ControlId|Control|MenuNavAction|CustomEventType|SlotsAvailable|ForceEnableMusic|LimitMusicVolumedB|ControlId|Size|HorizontalAlign|VerticalAlign|Visible|RelativePosition|RelativeScale|RelativeRotation|AbsolutePosition|AbsoluteScale|AbsoluteRotation|Color|Style|Width|MapInfo|MapName|Comments|AuthorZoneIconUrl|CollectionName|DecorationName|AuthorLogin|AuthorNickName|AuthorZonePath|MapType|MapStyle|TMObjective_AuthorTime|TMObjective_GoldTime|TMObjective_SilverTime|TMObjective_BronzeTime|TMObjective_NbLaps|TMObjective_IsLapRace|ObjectiveTextAuthor|ObjectiveTextGold|ObjectiveTextSilver|ObjectiveTextBronze|CopperPrice|Size|IsVisible|Type|AttachId|ManialinkPage|LocalPage|Type|Input|EditedAnchorDataId|Name|IsRoad|IsTerrain|WaypointType|NoRespawn|VariantGround|VariantAir|IsGround|HasStart|HasFinish|HasCheckpoint|GeneratedBlockModel|Name|Position|BlockScriptId|CanHaveAnchor|Coord|Direction|BlockModel|DefaultTag|DefaultOrder|Tag|Order|ModeStatusMessage|LoadedTitle|ServerLogin|ServerName|ServerModeName|MapName|Map|MapPlayerModelName|NeutralEmblemUrl|ForcedClubLinkUrl1|ForcedClubLinkUrl2|Now|Period|MatchEndRequested|ServerShutdownRequested|MapLoaded|NextMapIndex|UIManager|Ladder_RequestInProgress|Solo_NewRecordSequenceInProgress|XmlRpc|Xml|Http|UseMinimap|Replay_AutoStart|Score|SpawnStatus|StartTime|EndTime|AmmoGain|AmmoPower|AutoSwitchWeapon|CurWeapon|CurAmmo|CurAmmoMax|CurAmmoUnit|Armor|ArmorMax|ArmorGain|ArmorReplenishGain|ArmorPower|Stamina|StaminaMax|StaminaGain|StaminaPower|SpeedPower|JumpPower|AllowWallJump|AllowProgressiveJump|UseAlternateWeaponVisual|IsHighlighted|EnergyLevel|ForceColor|ForceModelId|HasShield|ThrowSpeed|CurrentClan|IdleDuration|Position|AimYaw|AimPitch|AimDirection|IsUnderground|IsTouchingGround|IsInAir|IsOnTechGround|IsOnTechLaser|IsOnTechArrow|IsOnTechArmor|IsOnTechSafeZone|IsOnTech|IsOnTechNoWeapon|IsInWater|Velocity|Speed|IsInOffZone|IsCapturing|CapturedLandmark|IsFakePlayer|IsBot|Driver|Type|Player|Damage|VictimObject|ShooterPoints|Shooter|Victim|Height|MissDist|WeaponNum|ShooterUsedAction|ShooterWeaponNum|ShooterActionSlot|ShooterActionId|VictimUsedAction|VictimWeaponNum|VictimActionSlot|VictimActionId|Action_Slot|ActionInput|ActionId|Param1|Object|BlockPole|Landmark|PlayerId|User|PlayerWasSpawned|PlayerWasInLadderMatch|PlayerLastPosition|PlayerLastAimDirection|GiveUp|CommandName|CommandValueBoolean|CommandValueInteger|CommandValueReal|CommandValueText|ActionChange|Clan|IsActive|NumberOfCollectors|Tag|Order|Position|Base|Gate|Gauge|Sector|PlayerSpawn|BotPath|ObjectAnchor|TeamNum|Points|RoundPoints|NbEliminationsInflicted|NbEliminationsTaken|NbRespawnsRequested|DamageInflicted|DamageTaken|Status|ModelId|Player|Position|Vel|MachineState|Throwable|GameTime|UI|ClientUI|IsSpectatorMode|UseClans|UseForcedClans|Map|CurrentServerLogin|CurrentServerName|CurrentServerJoinLink|CurrentServerModeName|Type|Player|Damage|ProjectileModelId|ContextId|Position|Direction|Normal|CustomEditAnchorData|ValidationStatus|ValidabilityRequirementsMessage|ValidationEndRequested|IsSwitchedToPlayground|CurrentClan|RaceState|IsSpawned|Score|RaceStartTime|LapStartTime|CurRace|CurLap|CurrentNbLaps|CurTriggerIndex|CurCheckpointRaceTime|CurCheckpointLapTime|AccelCoef|ControlCoef|Position|AimYaw|AimPitch|AimDirection|Distance|Speed|DisplaySpeed|TeamNum|Points|BestRace|BestLap|PrevRaceDeltaPoints|PrevRace|TempResult|CurrentClan|Score|RaceStartTime|IsSpawned|CurRace|CurLap|CurrentNbLaps|CurTriggerIndex|Position|AimYaw|AimPitch|AimDirection|AccelCoef|ControlCoef|Type|Player|RaceTime|CheckpointInRace|CheckpointInLap|IsEndLap|IsEndRace|LapTime|StuntsScore|NbRespawns|BlockId|Speed|Distance|Damages|StuntFigure|Angle|Points|Combo|IsStraight|IsReverse|IsMasterJump|Factor|User|PlayerWasSpawned|PlayerWasInLadderMatch|ClipWindowActive|ClipWindowRelativePosition|ClipWindowSize|TextContents|Root|Url|StatusCode|IsCompleted|IsPlaying|DownloadInProgress|Volume|VolumedB|Pitch|RelativePosition|PlayCursor|PlayLength|Comments|CopperPrice|CollectionName|AuthorLogin|AuthorNickName|AuthorZonePath|MapType|MapStyle|Unlocked|Name|Path|Name|PageName|Offset|BlockUnitModel|Block|Name|ZonePath|City|EmblemUrl|PresentationManialinkUrl|ClubLinkUrl|ColorPrimary|ColorSecondary|ColorText|ColorizedName|UIAll|UISequenceMaxDuration|User|Login|Name|RequestedClan|RequestsSpectate|Behaviour|AggroRadius|DisengageDistance|PathSpeedCoef|Accuracy|ReactionTime|ShootPeriodMin|ShootPeriodMax|RocketAnticipation|Fov|AttackFilter|Target|IsStuck|IsFlying|PathOffset|Agressivity|UseOldShootingSystem|Patrol_Mode|Escape_AnchorPoint|Escape_DistanceSafe|Escape_DistanceMinEscape|Escape_DistanceMaxEscape|Saunter_AnchorPoint|Saunter_BaseChillingTime|Saunter_ChillingTimeDelta|Saunter_Radius|Scripted_ForceAimInMoveDir|ForcedTarget|Captured|Sector|Gauge|Clan|Automatic|ManualClosed|AutoClosed|AutoIsActive|AutoCloseDelay|AutoOpenSpeed|Clan|ValueReal|Value|Max|Speed|Captured|Clan|IsFlying|ItemName|ItemModelId|User|IsRegisteredForLadderMatch|LadderScore|LadderRankSortValue|LadderMatchScoreValue|LadderClan|UISequence|UISequenceIsCompleted|UISequence_CustomMTClip|UISequence_CustomMTRefTime|UISequence_CanSkipIntroMT|UISequence_PodiumPlayersWin|UISequence_PodiumPlayersLose|ManialinkPage|BigMessage|BigMessageAvatarLogin|BigMessageAvatarVariant|BigMessageSound|BigMessageSoundVariant|StatusMessage|GaugeMessage|GaugeRatio|GaugeClan|MarkersXML|OverlayHideNotices|OverlayHideMapInfo|OverlayHideOpponentsInfo|OverlayHideChat|OverlayHideCheckPointList|OverlayHideRoundScores|OverlayHideCountdown|OverlayHideCrosshair|OverlayHideGauges|OverlayHideConsumables|OverlayHide321Go|OverlayHideBackground|OverlayHideChrono|OverlayHideSpeedAndDist|OverlayHidePersonnalBestAndRank|OverlayHidePosition|OverlayHideCheckPointTime|OverlayHideEndMapLadderRecap|OverlayHideMultilapInfos|OverlayHideSpectatorControllers|OverlayHideSpectatorInfos|OverlayChatHideAvatar|OverlayChatLineCount|OverlayChatOffset|CountdownCoord|NoticesFilter_HidePlayerInfo|NoticesFilter_HidePlayerWarning|NoticesFilter_HidePlayerInfoIfNotMe|NoticesFilter_HidePlayerWarningIfNotMe|NoticesFilter_HideMapInfo|NoticesFilter_HideMapWarning|NoticesFilter_HideMatchInfo|NoticesFilter_HideMatchWarning|NoticesFilter_LevelToShowAsBigMessage|ScoreTable|ScoreTableVisibility|SmallScoreTable|SmallScoreTableVisibility|ScoreTableOnlyManialink|AltMenuNoDefaultScores|AltMenuNoCustomScores|OverlayScoreSummary|ScoreSummary_Player1|ScoreSummary_Points1|ScoreSummary_RoundPoints1|ScoreSummary_MatchPoints1|ScoreSummary_Gauge1|ScoreSummary_Player2|ScoreSummary_Points2|ScoreSummary_RoundPoints2|ScoreSummary_MatchPoints2|ScoreSummary_Gauge2|ScreenIn3dHideScoreSummary|ScreenIn3dHideVersus|CountdownEndTime|UIStatus|AlliesLabelsVisibility|AlliesLabelsShowGauges|AlliesLabelsShowNames|AlliesLabelsMaxCount|TeamLabelsVisibility|TeamLabelsShowGauges|TeamLabelsShowNames|OpposingTeamLabelsVisibility|OpposingTeamLabelsShowGauges|OpposingTeamLabelsShowNames|ForceSpectator|SpectatorForceCameraType|SpectatorAutoTarget|SpectatorForcedTarget|SpectatorForcedClan|SpectatorCamAutoLatitude|SpectatorCamAutoLongitude|SpectatorCamAutoRadius|SpectatorObserverMode|Time|StuntsScore|NbRespawns|Name|TextContents|TextRawContents|TextRecursiveContents|Name|IsAllUnderground|IsPartUnderground|Size|OffsetBoundingBoxMin|OffsetBoundingBoxMax|Offset|Type|Param1|Param2|ParamArray1|Base|Clan|ValueReal|Value|Max|Speed|Tag|Order|Position|DirFront|Clan|IsActive|NumberOfCollectors)\b'
+      scope: entity.other.attribute-name.maniascript
     # Internal Enums
     - match: '\b(LinkType|EKeepRatioMode|EBuddyAction|EBuddyResult|ELinkType|EType|EMenuNavAction|CardinalDirections|PlaceMode|EditMode|EWeapon|EActionSlot|EActionInput|EGameplay|ETmScoreSortOrder|ETMRespawnBehaviour|ETmRaceChronoBehaviour|EPersonalGhost|EEchelon|ETagType|EStereoDisplayMode|Type|EMenuNavAction|ELibSound|AlignHorizontal|AlignVertical|EUILayerType|Type|EInput|EBaseType|EWayPointType|EProdState|CardinalDirections|CardinalDirections|EMedal|ESpawnStatus|EType|EActionSlot|EActionInput|EActionSlots|EStatus|EUISound|EInGameMenuResult|EType|ValidationStatus|ERaceState|EType|EStuntFigure|EControlType|EnumAutoTerrainPlaceType|ESmDriverBehaviour|ESmDriverPatrolMode|ESmAttackFilter|EUISequence|EUIStatus|EVisibility|ELabelsVisibility|EAvatarVariant|EUISound|ENoticeLevel|EObserverMode|ETmRaceResultCriteria|CardinalDirEnum|MultiDirEnum|EType|EnumClipType|MultiDirEnum)\b'
-      scope: storage.type.maniascript
+      scope: entity.name.enum.maniascript
+
+  variable_accessor:
+    - match: '(::)\b([A-Za-z_0-9]+)\b(?!(?=\())'
+      captures:
+        1: punctuation.accessor.double-colon.maniascript
+        2: entity.name.enum.maniascript
+    - match: '(\.)\b([A-Za-z_0-9]+)\b(?!(?=\())'
+      captures:
+        1: punctuation.accessor.dot.maniascript
+        2: entity.name.trait.maniascript
 
   strings:
     - match: '"'
       scope: punctuation.definition.string.begin.maniascript
-      set:
+      push:
         - meta_include_prototype: false
-        - meta_scope: string.quoted.double.maniascript
         - include: variable_insertion
         - match: '""'
           pop: true
@@ -214,13 +222,25 @@ contexts:
         - match: '"'
           scope: punctuation.definition.string.end.maniascript
           pop: true
+        - match: '.'
+          scope: string.quoted.double.maniascript
+
+  lists:
+    - match: '\['
+      scope: punctuation.section.brackets.begin.maniascript
+      push:
+        - include: strings
+        - include: operators
+        - match: '\]'
+          pop: true
+          scope: punctuation.section.brackets.end.maniascript
 
   operators:
     - match: '(\+|-|\*|/|%|\^)'
       scope: keyword.operator.arithmetic.maniascript
     - match: '(=|^=|\+=|\-=|\*=|/=|<=>)'
       scope: keyword.operator.assignment.maniascript
-    - match: '(==|!=|>|<|>=|<=|\|\||&&)'
+    - match: '(==|!|!=|>|< |>=|<=|\|\||&&)'
       scope: keyword.operator.logical.maniascript
 
   punctuations:
@@ -228,10 +248,6 @@ contexts:
       scope: punctuation.terminator.maniascript
     - match: ','
       scope: punctuation.separator.maniascript
-    - match: '\.'
-      scope: punctuation.accessor.dot.maniascript
-    - match: '::'
-      scope: punctuation.accessor.double-colon.maniascript
 
   numbers:
     - match: '\b(-)?[0-9.]+\b'
