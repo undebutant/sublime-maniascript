@@ -50,6 +50,7 @@ contexts:
   main:
     # The main context is the initial starting point of our syntax
     - include: operators
+    - include: escape_embedded_maniascript
     - include: Packages/XML/XML.sublime-syntax
     - include: functions_like
     - include: structs
@@ -62,6 +63,11 @@ contexts:
     - include: lists
     - include: punctuations
     - include: numbers
+
+  escape_embedded_maniascript:
+    - match: '<(script)> *<!--'
+      captures:
+        1: entity.name.tag.maniascript
 
   functions_like:
     # Language keywords
